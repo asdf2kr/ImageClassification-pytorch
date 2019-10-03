@@ -98,7 +98,7 @@ def main():
         with torch.no_grad():
             acc1 = run_epoch(model, 'valid', criterion, optimizer, valid_loader)
         # Save checkpoint.
-        if acc > best_acc:
+        if acc1 > best_acc:
             print('[Info] Save the model.')
         print('[Info] acc1 {} best {}'.format(acc1, best_acc))
 
