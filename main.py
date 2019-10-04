@@ -6,8 +6,8 @@ import torch
 import torch.nn
 import torch.optim
 import torchvision.models as models
-from Models.resnet import ResNet as resnet
-from Models.vggnet import VGGNet as vggnet
+import Models.resnet as resnet
+import Models.vggnet as vggnet
 from utils import prepare_dataloaders
 '''
     reference:
@@ -56,9 +56,13 @@ def main():
     parser.add_argument('--save_directory', default='trained.chkpt', type=str, help='path to latest checkpoint')
     parser.add_argument('--workers', default=8, type=int, help='num_workers')
     parser.add_argument('--resume', default=False, type=bool, help='resume')
+    parser.add_argument('--datasets', default='CIFAR10', type=str, help='classification dataset  (CIFAR10, ImageNet)')
+    parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight_decay')
     args = parser.parse_args()
-    # use gpu or multi-gpu or not.
+    args.model = args.model.lower()
+    args.datasets = args.datasets.lower()
 
+    # use gpu or multi-gpu or not.
     use_gpu = torch.cuda.is_available()
     if use_gpu :
         use_multi_gpu = torch.cuda.device_count() > 1
@@ -68,13 +72,30 @@ def main():
     print('[Info] Load the data.')
     train_loader, valid_loader = prepare_dataloaders(args)
 
+
+
     # load the model.
     print('[Info] Load the model.')
-    if args.model.find('resnet') != -1:
-        model = resnet(args, 10)
+
+    if args.datasets == 'cifar10':
+        num_classes = 10
+    elif args.datasets == 'imagenet':
+        num_classes = 1000
+
+    if args.model == 'resnet18':
+        model = resnet.resnet18(num_classes=num_classes)
+    elif args.model == 'resnet34':
+        model = resnet.resnet34(num_classes=num_classes)
+    elif args.model == 'resnet50':
+        model = resnet.resnet50(num_classes=num_classes)
+    elif args.model == 'resnet101':
+        model = resnet.resnet101(num_classes=num_classes)
+    elif args.model == 'resnet152':
+        model = resnet.resnet152(num_classes=num_classes)
     elif args.model.find('vggnet') != -1:
-        model = vggnet(args, 10)
-    print(count_parameters(model))
+        model = vggnet(args, num_classes=num_classes)
+
+    # print(count_parameters(model))
     # print('torchvision ', count_parameters(models.resnet50()))
     if use_gpu:
         model = model.cuda()
@@ -84,7 +105,7 @@ def main():
     criterion = torch.nn.CrossEntropyLoss().cuda()
 
     # define optimizer
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
     if args.resume:
         # Load the checkpoint.

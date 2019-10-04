@@ -1,12 +1,5 @@
 import torch
 import torch.nn as nn
-def conv1x1(in_channels, out_channels, stride=1):
-    ''' 1x1 convolution '''
-    return nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False)
-
-def conv3x3(in_channels, out_channels, stride=1):
-    ''' 3x3 convolution '''
-    return nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
 
 '''
         conv_i
@@ -15,11 +8,49 @@ def conv3x3(in_channels, out_channels, stride=1):
 
         x = self.conv3(x) # (56, 56, 256) ->  (56, 56, 128) -> (28, 28, 128) ->(28, 28, 512)
 '''
-class Block(nn.Module): # bottelnet block, over the 50 layers.
+__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
+
+def conv1x1(in_channels, out_channels, stride=1):
+    ''' 1x1 convolution '''
+    return nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False)
+
+def conv3x3(in_channels, out_channels, stride=1):
+    ''' 3x3 convolution '''
+    return nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+
+class BasicBlock(nn.Module):
+    expansion = 1
+    def __init__(self, in_channels, hid_channels, stride=1, downsample=None):
+        super(BasicBlock, self).__init__()
+        self.conv1 = conv3x3(in_channels, hid_channels, stride)
+        self.bn1 = nn.BatchNorm2d(hid_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = conv3x3(hid_channels, hid_channels)
+        self.bn2 = nn.BatchNorm2d(hid_channels)
+        self.downsample = downsample
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+class BottleneckBlock(nn.Module): # bottelneck-block, over the 50 layers.
     expansion = 4
-    def __init__(self, in_channels, hid_channels, stride=1, down_sample=None):
-        super(Block, self).__init__()
-        self.down_sample = down_sample
+    def __init__(self, in_channels, hid_channels, stride=1, downsample=None):
+        super(BottleneckBlock, self).__init__()
+        self.downsample = downsample
         out_channels = hid_channels * self.expansion
         self.conv1 = conv1x1(in_channels, hid_channels)
         self.bn1 = nn.BatchNorm2d(hid_channels)
@@ -30,7 +61,7 @@ class Block(nn.Module): # bottelnet block, over the 50 layers.
         self.conv3 = conv1x1(hid_channels, out_channels)
         self.bn3 = nn.BatchNorm2d(out_channels)
 
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         residual = x # indentity
@@ -45,16 +76,19 @@ class Block(nn.Module): # bottelnet block, over the 50 layers.
         out = self.conv3(out)
         out = self.bn3(out)
 
-        if self.down_sample is not None:
-            residual = self.down_sample(x)
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
         out += residual
         out = self.relu(out)
+
         return out
 
 class ResNet(nn.Module):
     '''
     *Input
         (224, 224, 3)
+        The stride applies only  is
         stride는 입력 영상의 크기가 큰 경우,
         연산량을 줄이기 위한 목적으로 입력단과 가까운 쪽에만 적용한다.
         (Input_size - conv_size) / stride + 1 = output_size
@@ -109,50 +143,47 @@ class ResNet(nn.Module):
             average pool, 100-d fc, softmax
         FLOPs 7.6x10^9
     '''
-    def __init__(self, args, num_classes=1000, zero_init_residual=False,
-                 norm_layer=None):
-
+    def __init__(self, block, layers, num_classes=1000):
         super(ResNet, self).__init__()
-        self.args = args
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
-        if self.args.model == 'resnet50':
-            self.layers = [3, 4, 6, 3]
-        elif self.args.model == 'resnet101':
-            self.layers = [3, 4, 23, 3]
 
+        self.layers = layers
+        self.in_channels = 64
 
-        self.block = Block
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.maxPool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.conv2 = self.get_layers(self.block, 64, 64, self.layers[0])
-        self.conv3 = self.get_layers(self.block, 256, 128, self.layers[1], stride=2)
-        self.conv4 = self.get_layers(self.block, 512, 256, self.layers[2], stride=2)
-        self.conv5 = self.get_layers(self.block, 1024, 512, self.layers[3], stride=2)
+
+        self.conv2 = self.get_layers(block, 64, self.layers[0])
+        self.conv3 = self.get_layers(block, 128, self.layers[1], stride=2)
+        self.conv4 = self.get_layers(block, 256, self.layers[2], stride=2)
+        self.conv5 = self.get_layers(block, 512, self.layers[3], stride=2)
         self.avgPool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * self.block.expansion, num_classes)
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
 
-    def get_layers(self, block, in_channels, hid_channels, n_layers, stride=1):
+        '''
+        for m in self.modules():
+        '''
 
-        down_sample = None
-        if stride != 1 or in_channels != hid_channels * block.expansion:
-            down_sample = nn.Sequential(
-                                    conv1x1(in_channels, hid_channels * block.expansion, stride),
-                                    nn.BatchNorm2d(hid_channels * block.expansion),
-                            )
+    def get_layers(self, block, hid_channels, n_layers, stride=1):
+        downsample = None
+        if stride != 1 or self.in_channels != hid_channels * block.expansion:
+            downsample = nn.Sequential(
+                    conv1x1(self.in_channels, hid_channels * block.expansion, stride),
+                    nn.BatchNorm2d(hid_channels * block.expansion),
+            )
         layers = []
-        layers.append(block(in_channels, hid_channels, stride, down_sample))
-        in_channels = hid_channels * block.expansion
+        layers.append(block(self.in_channels, hid_channels, stride, downsample))
+        self.in_channels = hid_channels * block.expansion
 
         for _ in range(1, n_layers):
-            layers.append(block(in_channels, hid_channels))
-
+            layers.append(block(self.in_channels, hid_channels))
         return nn.Sequential(*layers)
 
     def forward(self, x):
         '''
-            based on resnet101
+            Example tensor shape based on resnet101
         '''
         # (224 + 6(padding*2) - 7 ) / 2 + 1 = 112
         x = self.conv1(x) # (224, 224, 3) -> (112, 112, 64), kernel(7,7)
@@ -169,6 +200,22 @@ class ResNet(nn.Module):
         x = self.conv5(x) # { (14, 14, 1024) ->  (14, 14, 512) -> (7, 7, 512) ->(7, 7, 2048) } -> ...
 
         x = self.avgPool(x) # (7, 7, 2048) -> (1, 1, 2048), kernel(7, 7)
-        x = torch.flatten(x, 1)
+        x = x.view(x.size(0), -1) # (batch, )
         x = self.fc(x) # (1, 1, 2048) -> (1, 1, 1000)
         return x
+
+def resnet18(**kwargs):
+    return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+
+def resnet34(**kwargs):
+    return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+
+def resnet50(**kwargs):
+    return ResNet(BottleneckBlock, [3, 4, 6, 3], **kwargs)
+
+def resnet101(**kwargs):
+    ''' ResNet-101 Model'''
+    return ResNet(BottleneckBlock, [3, 4, 23, 3], **kwargs)
+
+def resnet152(**kwargs):
+    return ResNet(BottleneckBlock, [3, 8, 36, 3], **kwargs)
