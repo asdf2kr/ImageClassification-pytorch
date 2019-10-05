@@ -99,7 +99,7 @@ def main():
 
     # print(count_parameters(model))
     # print('torchvision ', count_parameters(models.resnet50()))
-
+    epoch_ = 1
     if use_gpu:
         model = model.cuda()
         model = torch.nn.DataParallel(model)
@@ -113,11 +113,23 @@ def main():
     if args.resume:
         # Load the checkpoint.
         print('[Info] Resuming from checkpoint.')
-        checkpoint = torch.load('ckpt.pth')
+        if torch.cuda.device_count() > 1:
+            checkpoint = torch.load(args.save_multi)
+        else:
+            checkpoint = torch.load(args.save)
+
+        epoch_ = checkpoint['epoch']
+        cnn_ = checkpoint['cnn']
+        model_ = checkpoint['model']
+
+        model.load_state_dict(model_)
+        print('[Info] epoch {} base_model {}'.format(epoch_, cnn_))
+
     # run epoch.
 
     best_acc = 0.
-    for epoch in range(1, args.n_epochs + 1):
+    for epoch in range(epoch_, args.n_epochs + 1):
+        adjust_learning_rate(optimizer, epoch, args)
         _ = run_epoch(model, 'train', epoch, criterion, optimizer, train_loader, train_size)
         with torch.no_grad():
             acc1 = run_epoch(model, 'valid', epoch, criterion, optimizer, valid_loader, valid_size)
@@ -136,6 +148,7 @@ def main():
                     'model': model.module.state_dict(),
                     'epoch': epoch,
                     'cnn': args.model}
+
                 torch.save(checkpoint_module, args.save_multi)
             print(' - [Info] The checkpoint file has been updated.')
 
@@ -160,9 +173,7 @@ def accuracy(output, target, topk=(1,)):
             res.append(correct_k)
         return res
 
-
 def adjust_learning_rate(optimizer, epoch, args):
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     lr = args.lr * (0.1 ** (epoch // 30))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
