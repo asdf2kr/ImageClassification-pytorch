@@ -41,8 +41,8 @@ def run_epoch(model, mode, epoch, criterion, optimizer, data_loader, dataset_siz
             # backward
             loss.backward()
             optimizer.step()
-    print(' - ({}) epoch {} loss {:.4f} acc {:.4f} top1 {:.4f} top5 {:.4f}'.format(mode, i, total_loss / dataset_size, total_correct / dataset_size * 100., acc1 / dataset_size * 100. , acc5 / dataset_size * 100.))
-    return acc1
+    print(' - ({}) epoch {} loss {:.4f} acc {:.4f} top1 {:.4f} top5 {:.4f}'.format(mode, epoch, total_loss / dataset_size, total_correct / dataset_size * 100., acc1 / dataset_size * 100. , acc5 / dataset_size * 100.))
+    return acc1 / dataset_size * 100.
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
