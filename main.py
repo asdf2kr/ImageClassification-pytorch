@@ -1,5 +1,7 @@
 import parser
 import argparse
+
+from tqdm import tqdm
 # import argparser
 
 import torch
@@ -14,41 +16,41 @@ from utils import prepare_dataloaders
         torchvision
         conda install -c conda-forge torchvision
 '''
-def run_epoch(model, mode, criterion, optimizer, data_loader):
+def run_epoch(model, mode, epoch, criterion, optimizer, data_loader, dataset_size):
     if mode == 'train':
         model.train()
     else:
         model.eval()
-    for i, (data, target) in enumerate(data_loader):
+
+    total_loss = 0.
+    total_correct = 0
+    for data, target in tqdm(data_loader, desc='  - (' + mode + ')   ', leave=False):
         # prepare data
         data, target = data.cuda(), target.cuda()
 
         optimizer.zero_grad()
         # forward
         output = model(data)
-
         loss = criterion(output, target)
+
+        total_loss += loss.item()
+        total_correct += torch.sum(output.data.max(1)[1] == target.data)
+
+        acc1, acc5 = accuracy(output, target, topk=(1,5))
         if mode == 'train':
-            #  backward
+            # backward
             loss.backward()
             optimizer.step()
-            acc1, acc5 = accuracy(output, target, topk=(1,5))
-
-            print(' - ({}) iter {}/{} loss {:.4f} top1 {:.4f} top5 {:.4f}'.format(mode, i+1, len(data_loader), loss, acc1[0], acc5[0]))
-            # print(' - ({}) iter {}/{} loss {:.4f}'.format(mode, i+1, len(data_loader), loss))
-        else:
-            pred = output.data.max(1)[1]
-            acc1, acc5 = accuracy(output, target, topk=(1,5))
-            # correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-            print(' - ({}) iter {}/{} loss {:.4f} top1 {:.4f} top5 {:.4f}'.format(mode, i+1, len(data_loader), loss, acc1[0], acc5[0]))
+    print(' - ({}) epoch {} loss {:.4f} acc {:.4f} top1 {:.4f} top5 {:.4f}'.format(mode, i, total_loss / dataset_size, total_correct / dataset_size * 100., acc1 / dataset_size * 100. , acc5 / dataset_size * 100.))
     return acc1
+
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def main():
     ''' Main function '''
     parser = argparse.ArgumentParser(description='Implement image classification on ImageNet datset using pytorch')
-    parser.add_argument('--model', default='resnet50', type=str, help='classification model (resnet101, resnet50, vggnet')
+    parser.add_argument('--model', default='resnet50', type=str, help='classification model (resnet(18, 34, 50, 101, 152), vggnet16')
     parser.add_argument('--n_epochs', default=1000, type=int, help='numeber of total epochs to run')
     parser.add_argument('--batch', default=64, type=int, help='mini batch size (default: 256)')
     parser.add_argument('--lr', default=0.001, type=float, help='initial learning rate')
@@ -58,6 +60,8 @@ def main():
     parser.add_argument('--resume', default=False, type=bool, help='resume')
     parser.add_argument('--datasets', default='CIFAR10', type=str, help='classification dataset  (CIFAR10, ImageNet)')
     parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight_decay')
+    parser.add_argument('--save', default='Datas/trained.chkpt', type=str, help='Datas/trained.chkpt')
+    parser.add_argument('--save_multi', default='Datas/trained_multi.chkpt', type=str, help='Datas/trained_multi.chkpt')
     args = parser.parse_args()
     args.model = args.model.lower()
     args.datasets = args.datasets.lower()
@@ -70,9 +74,7 @@ def main():
 
     # load the data.
     print('[Info] Load the data.')
-    train_loader, valid_loader = prepare_dataloaders(args)
-
-
+    train_loader, valid_loader, train_size, valid_size = prepare_dataloaders(args)
 
     # load the model.
     print('[Info] Load the model.')
@@ -92,11 +94,12 @@ def main():
         model = resnet.resnet101(num_classes=num_classes)
     elif args.model == 'resnet152':
         model = resnet.resnet152(num_classes=num_classes)
-    elif args.model.find('vggnet') != -1:
-        model = vggnet(args, num_classes=num_classes)
+    elif args.model == 'vggnet16':
+        model = vggnet.vggnet16(num_classes=num_classes)
 
     # print(count_parameters(model))
     # print('torchvision ', count_parameters(models.resnet50()))
+
     if use_gpu:
         model = model.cuda()
         model = torch.nn.DataParallel(model)
@@ -115,12 +118,27 @@ def main():
 
     best_acc = 0.
     for epoch in range(1, args.n_epochs + 1):
-        _ = run_epoch(model, 'train', criterion, optimizer, train_loader)
+        _ = run_epoch(model, 'train', epoch, criterion, optimizer, train_loader, train_size)
         with torch.no_grad():
-            acc1 = run_epoch(model, 'valid', criterion, optimizer, valid_loader)
+            acc1 = run_epoch(model, 'valid', epoch, criterion, optimizer, valid_loader, valid_size)
+
         # Save checkpoint.
         if acc1 > best_acc:
-            print('[Info] Save the model.')
+            best_acc = acc1
+            checkpoint = {
+                'model': model.state_dict(),
+                'epoch': epoch,
+                'cnn': args.model}
+            torch.save(checkpoint, args.save)
+
+            if torch.cuda.device_count() > 1:
+                checkpoint_module = {
+                    'model': model.module.state_dict(),
+                    'epoch': epoch,
+                    'cnn': args.model}
+                torch.save(checkpoint_module, args.save_multi)
+            print(' - [Info] The checkpoint file has been updated.')
+
         print('[Info] acc1 {} best {}'.format(acc1, best_acc))
 
 def accuracy(output, target, topk=(1,)):
@@ -139,7 +157,7 @@ def accuracy(output, target, topk=(1,)):
         res = []
         for k in topk:
             correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-            res.append(correct_k.mul_(100.0 / bsz))
+            res.append(correct_k)
         return res
 
 
