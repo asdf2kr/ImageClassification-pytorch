@@ -65,4 +65,4 @@ def prepare_dataloaders(args):
                                                     num_workers = args.workers,
                                                     shuffle = True)
 
-    return train_loader, valid_loader
+    return train_loader, valid_loader, len(train_dataset), len(valid_dataset)
