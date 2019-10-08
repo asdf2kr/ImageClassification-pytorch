@@ -4,7 +4,7 @@ import torch.nn as nn
 
 __all__ = ['VGGNet', 'vgg16']
 class VGGNet(nn.Module):
-    def __init__(self, model, num_classes=1000, init_weights=True):
+    def __init__(self, model, num_classes=1000):
         super(VGGNet, self).__init__()
         self.model = model
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
