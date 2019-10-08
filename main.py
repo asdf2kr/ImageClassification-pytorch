@@ -18,6 +18,9 @@ from tqdm import tqdm
         pytorch, torchvision
         conda install -c conda-forge torchvision
 '''
+'''
+TO-do:
+'''
 def main():
     ''' Main function '''
     parser = argparse.ArgumentParser(description='Implement image classification on ImageNet datset using pytorch')
@@ -128,13 +131,14 @@ def main():
             'optimizer': optimizer.state_dict(),
         }, is_best, args.save)
 
-        save_checkpoint({
-            'epoch': e,
-            'arch': args.arch,
-            'state_dict': model.module.state_dict(),
-            'best_acc1': best_acc1,
-            'optimizer': optimizer.state_dict(),
-        }, is_best & use_multi_gpu, args_save_multi)
+        if use_multi_gpu:
+            save_checkpoint({
+                'epoch': e,
+                'arch': args.arch,
+                'state_dict': model.module.state_dict(),
+                'best_acc1': best_acc1,
+                'optimizer': optimizer.state_dict(),
+            }, is_best, args_save_multi)
 
         print('[Info] acc1 {} best@acc1 {}'.format(acc1, best_acc1))
 
