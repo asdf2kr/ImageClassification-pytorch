@@ -31,7 +31,7 @@ def main():
     parser.add_argument('--save_directory', default='trained.chkpt', type=str, help='path to latest checkpoint')
     parser.add_argument('--workers', default=8, type=int, help='num_workers')
     parser.add_argument('--resume', default=False, type=bool, help='resume')
-    parser.add_argument('--datasets', default='CIFAR10', type=str, help='classification dataset  (CIFAR10, ImageNet)')
+    parser.add_argument('--datasets', default='CIFAR100', type=str, help='classification dataset  (CIFAR10, CIFAR100, ImageNet)')
     parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight_decay')
     parser.add_argument('--save', default='trained', type=str, help='trained.chkpt')
     parser.add_argument('--save_multi', default='trained_multi', type=str, help='trained_multi.chkpt')
@@ -59,8 +59,11 @@ def main():
 
     if args.datasets == 'cifar10':
         num_classes = 10
+    elif args.datasets == 'cifar100':
+        num_classes = 100
     elif args.datasets == 'imagenet':
         num_classes = 1000
+
 
     if args.arch == 'resnet18':
         model = resnet.resnet18(num_classes=num_classes)
@@ -74,9 +77,6 @@ def main():
         model = resnet.resnet152(num_classes=num_classes)
     elif args.arch == 'vggnet16':
         model = vggnet.vggnet16(num_classes=num_classes)
-
-    # print(count_parameters(model))
-    # print('torchvision ', count_parameters(models.resnet50()))
 
     model = model.to(device)
     if use_multi_gpu : model = torch.nn.DataParallel(model)
@@ -136,7 +136,7 @@ def main():
                 'state_dict': model.module.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer': optimizer.state_dict(),
-            }, is_best, args_save_multi)
+            }, is_best, args.save_multi)
 
         print('[Info] acc1 {} best@acc1 {}'.format(acc1, best_acc1))
 
