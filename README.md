@@ -1,5 +1,4 @@
 ## ImageClassification-pytorch
-===========================
 
 This code purpose to evaluate of popular model architectures, such as ResNet, VGG on the CIFAR, ImageNet dataset.
 
@@ -18,8 +17,7 @@ The table below shows
 |Resnet50||CIFAR-100||78.93||-||2.37M|
 
 
-####To-do::
-=======
+#### To-do
 Compare original resnet with this model. (Parameters and Performance)
 Simple setup readme
 Add ImageNet datasets.
