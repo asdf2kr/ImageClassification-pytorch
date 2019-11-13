@@ -12,9 +12,9 @@ $ python main.py (default: resnet50)
 #### Performance
 The table below shows 
 
-|Model||Dataset||Top-1||Top-5||Size|
-|:---:||:---:||:---:||:---:||:---:|
-|Resnet50||CIFAR-100||78.93||-||2.37M|
+Model | Dataset | Top-1 | Top-5 | Size
+:----:| :------:| :----:|:-----:|:----:
+Resnet50 | CIFAR-100 | 78.93% | - | 2.37M
 
 
 #### To-do
