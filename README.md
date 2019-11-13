@@ -5,12 +5,12 @@ This code purpose to evaluate of popular model architectures, such as ResNet, VG
 #### Getting Started
 ```bash
 $ git clone https://github.com/asdf2kr/ImageClassification-pytorch.git
-$ cd ImageClassification-yptorch
+$ cd ImageClassification-pytorch
 $ python main.py (default: resnet50)
 ```
 
 #### Performance
-The table below shows 
+The table below shows models, dataset and performances
 
 Model | Dataset | Top-1 | Top-5 | Size
 :----:| :------:| :----:|:-----:|:----:
