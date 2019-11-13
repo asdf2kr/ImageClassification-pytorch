@@ -81,7 +81,6 @@ class BottleneckBlock(nn.Module): # bottelneck-block, over the 50 layers.
 
         out += residual
         out = self.relu(out)
-
         return out
 
 class ResNet(nn.Module):
@@ -150,11 +149,19 @@ class ResNet(nn.Module):
         self.layers = layers
         self.in_channels = 64
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxPool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
+        if num_classes == 1000:
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            )
+        else:
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(64),
+                nn.ReLU(inplace=True)
+            )
         self.conv2 = self.get_layers(block, 64, self.layers[0])
         self.conv3 = self.get_layers(block, 128, self.layers[1], stride=2)
         self.conv4 = self.get_layers(block, 256, self.layers[2], stride=2)
@@ -191,10 +198,11 @@ class ResNet(nn.Module):
         '''
         # (224 + 6(padding*2) - 7 ) / 2 + 1 = 112
         x = self.conv1(x) # (224, 224, 3) -> (112, 112, 64), kernel(7,7)
+        '''
         x = self.bn(x)
         x = self.relu(x)
         x = self.maxPool(x) # (112, 112, 64) -> (56, 56, 64), kernel(3,3)
-
+        '''
         x = self.conv2(x) # { (56, 56, 64) -> (56, 56, 64) -> -(56, 56, 64) -> (56, 56, 256) } -> ... -> {(56, 56, 256) -> ... -> (56, 56, 256)}
         x = self.conv3(x) # { (56, 56, 256) ->  (56, 56, 128) -> (28, 28, 128) ->(28, 28, 512) } -> ...
         x = self.conv4(x) # { (28, 28, 512) ->  (28, 28, 256) -> (14, 14, 256) ->(14, 14, 1024) } -> ...
