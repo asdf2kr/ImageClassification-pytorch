@@ -98,17 +98,15 @@ def main():
     if args.resume:
         # Load the checkpoint.
         print('[Info] Loading checkpoint.')
-        if torch.cuda.device_count() > 1:
-            checkpoint = load_checkpoint(args.save_multi)
-        else:
-            checkpoint = load_checkpoint(args.save)
+ 
+        checkpoint = load_checkpoint(args.save)
 
         arch = checkpoint['arch']
         args.epoch = checkpoint['epoch']
         state_dict = checkpoint['state_dict']
         optimizer = checkpoint['optimizer']
         model.load_state_dict(state_dict)
-        print('[Info] epoch {} arch {}'.format(args.epoch, arch))
+        print('[Info] Loading model Info.\n Epoch {} Backbone-arch {}'.format(args.epoch, arch))
 
     # run evaluate.
     if args.evaluate:
