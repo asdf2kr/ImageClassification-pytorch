@@ -7,32 +7,37 @@ import argparse
 import torch
 import torch.nn
 import torch.optim
-import torchvision.models as models
 
 import Models.resnet as resnet
 import Models.vggnet as vggnet
-from utils import prepare_dataloaders
+from utils import prepare_dataloaders, download_dataloaders
 from tqdm import tqdm
+
+import torch.distributed as dist
+
+import torch.multiprocessing as mp
 '''
     reference:
         pytorch, torchvision
         conda install -c conda-forge torchvision
 '''
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def main():
     ''' Main function '''
     parser = argparse.ArgumentParser(description='Implement image classification on ImageNet datset using pytorch')
     parser.add_argument('--arch', default='resnet50', type=str, help='classification model (resnet(18, 34, 50, 101, 152), vggnet16')
     parser.add_argument('--epoch', default=1, type=int, help='start epoch')
-    parser.add_argument('--n_epochs', default=1000, type=int, help='numeber of total epochs to run')
-    parser.add_argument('--batch', default=96, type=int, help='mini batch size (default: 256)')
-    parser.add_argument('--lr', default=0.001, type=float, help='initial learning rate')
+    parser.add_argument('--n_epochs', default=350, type=int, help='numeber of total epochs to run')
+    parser.add_argument('--batch', default=256, type=int, help='mini batch size (default: 1024)')
+    parser.add_argument('--lr', default=0.1, type=float, help='initial learning rate')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
     parser.add_argument('--save_directory', default='trained.chkpt', type=str, help='path to latest checkpoint')
-    parser.add_argument('--workers', default=8, type=int, help='num_workers')
+    parser.add_argument('--workers', default=0, type=int, help='num_workers')
     parser.add_argument('--resume', default=False, type=bool, help='resume')
     parser.add_argument('--datasets', default='CIFAR100', type=str, help='classification dataset  (CIFAR10, CIFAR100, ImageNet)')
-    parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight_decay')
+    parser.add_argument('--weight_decay', default=5e-4, type=float, help='weight_decay')
     parser.add_argument('--save', default='trained', type=str, help='trained.chkpt')
     parser.add_argument('--save_multi', default='trained_multi', type=str, help='trained_multi.chkpt')
     parser.add_argument('--evaluate', default=False, type=bool, help='evaluate')
@@ -46,8 +51,8 @@ def main():
 
     # use gpu or multi-gpu or not.
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    use_multi_gpu = torch.cuda.device_count() > 1
-    print('[Info] device:{} use_multi_gpu:{}'.format(device, use_multi_gpu))
+    multi_gpu = torch.cuda.device_count() > 1
+    print('[Info] device:{} multi_gpu:{}'.format(device, multi_gpu))
 
     # load the data.
     print('[Info] Load the data.')
@@ -78,8 +83,11 @@ def main():
     elif args.arch == 'vggnet16':
         model = vggnet.vggnet16(num_classes=num_classes)
 
+    print("[Info] Count_parameters ", count_parameters(model))
+    return
     model = model.to(device)
-    if use_multi_gpu : model = torch.nn.DataParallel(model)
+    if multi_gpu :
+        model = torch.nn.DataParallel(model)
 
     # define loss function.
     criterion = torch.nn.CrossEntropyLoss().to(device)
@@ -91,13 +99,14 @@ def main():
         # Load the checkpoint.
         print('[Info] Loading checkpoint.')
         if torch.cuda.device_count() > 1:
-            checkpoint = torch.load(args.save_multi)
+            checkpoint = load_checkpoint(args.save_multi)
         else:
-            checkpoint = torch.load(args.save)
+            checkpoint = load_checkpoint(args.save)
 
         arch = checkpoint['arch']
         args.epoch = checkpoint['epoch']
         state_dict = checkpoint['state_dict']
+        optimizer = checkpoint['optimizer']
         model.load_state_dict(state_dict)
         print('[Info] epoch {} arch {}'.format(args.epoch, arch))
 
@@ -129,7 +138,7 @@ def main():
             'optimizer': optimizer.state_dict(),
         }, is_best, args.save)
 
-        if use_multi_gpu:
+        if multi_gpu:
             save_checkpoint({
                 'epoch': e,
                 'arch': args.arch,
@@ -186,6 +195,10 @@ def save_checkpoint(state, is_best, prefix):
         shutil.copyfile(filename, 'checkpoints/{}_best.chkpt'.format(prefix))
     print(' - [Info] The checkpoint file has been updated.')
 
+def load_checkpoint(prefix):
+    filename='checkpoints/{}_checkpoint.chkpt'.format(prefix)
+    return torch.load(filename)
+
 class AverageMeter(object):
     '''Computes and stores the average and current value'''
     def __init__(self):
@@ -205,7 +218,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def adjust_learning_rate(optimizer, epoch, args):
-    lr = args.lr * (0.1 ** (epoch // 30))
+    lr = args.lr * (0.1 ** (epoch // 100))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 

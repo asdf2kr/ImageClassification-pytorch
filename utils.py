@@ -13,7 +13,7 @@ def prepare_dataloaders(args):
 
     if args.datasets == 'cifar10':
         train_transform = transform=transforms.Compose([
-                                   transforms.Resize(32), #padding=4
+                                   transforms.Resize(32),
                                    transforms.RandomHorizontalFlip(),
                                    transforms.ToTensor(),
                                    transforms.Normalize((0.485, 0.456, 0.406),
@@ -30,7 +30,7 @@ def prepare_dataloaders(args):
 
     elif args.datasets == 'cifar100':
         train_transform = transform=transforms.Compose([
-                                   transforms.Resize(32), #padding=4
+                                   transforms.Resize(32),
                                    transforms.RandomHorizontalFlip(),
                                    transforms.ToTensor(),
                                    transforms.Normalize((0.485, 0.456, 0.406),
